@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Agent with Conversation Context</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .chat-container {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .chat-messages {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 20px;
+            background-color: #fafafa;
+        }
+        .message {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .user-message {
+            background-color: #007bff;
+            color: white;
+            margin-left: 20%;
+        }
+        .ai-message {
+            background-color: #e9ecef;
+            color: #333;
+            margin-right: 20%;
+        }
+        .input-container {
+            display: flex;
+            gap: 10px;
+        }
+        #messageInput {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .session-info {
+            background-color: #e7f3ff;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            border-left: 4px solid #007bff;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .secondary-button {
+            background-color: #6c757d;
+        }
+        .secondary-button:hover {
+            background-color: #545b62;
+        }
+        .loading {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <h1>🤖 AI Agent with Conversation Context</h1>
+        
+        <div class="session-info">
+            <strong>Session ID:</strong> <span id="sessionId"></span> | 
+            <strong>Messages:</strong> <span id="messageCount">0</span>
+        </div>
+
+        <div class="controls">
+            <button onclick="generateNewSession()" class="secondary-button">🆕 New Session</button>
+            <button onclick="clearConversation()" class="secondary-button">🗑️ Clear Chat</button>
+            <button onclick="loadConversationHistory()" class="secondary-button">📋 Load History</button>
+        </div>
+
+        <div class="chat-messages" id="chatMessages">
+            <div class="message ai-message">
+                Hello! I'm your AI assistant with conversation memory. I'll remember our chat history and provide contextual responses. How can I help you today?
+            </div>
+        </div>
+
+        <div class="input-container">
+            <input type="text" id="messageInput" placeholder="Type your message here..." onkeypress="handleKeyPress(event)">
+            <button onclick="sendMessage()" id="sendButton">Send</button>
+        </div>
+    </div>
+
+    <script>
+        let currentSessionId = generateSessionId();
+        let isWaitingForResponse = false;
+
+        // Initialize
+        document.getElementById('sessionId').textContent = currentSessionId;
+
+        function generateSessionId() {
+            return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        function generateNewSession() {
+            currentSessionId = generateSessionId();
+            document.getElementById('sessionId').textContent = currentSessionId;
+            document.getElementById('chatMessages').innerHTML = `
+                <div class="message ai-message">
+                    Hello! I'm your AI assistant with conversation memory. I'll remember our chat history and provide contextual responses. How can I help you today?
+                </div>
+            `;
+            document.getElementById('messageCount').textContent = '0';
+        }
+
+        async function clearConversation() {
+            try {
+                const response = await fetch(`http://localhost:3000/api/conversation/${currentSessionId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    document.getElementById('chatMessages').innerHTML = `
+                        <div class="message ai-message">
+                            Conversation cleared! How can I help you today?
+                        </div>
+                    `;
+                    document.getElementById('messageCount').textContent = '0';
+                }
+            } catch (error) {
+                console.error('Error clearing conversation:', error);
+                alert('Error clearing conversation');
+            }
+        }
+
+        async function loadConversationHistory() {
+            try {
+                const response = await fetch(`http://localhost:3000/api/conversation/${currentSessionId}`);
+                const data = await response.json();
+                
+                if (data.messages && data.messages.length > 0) {
+                    const chatMessages = document.getElementById('chatMessages');
+                    chatMessages.innerHTML = '';
+                    
+                    data.messages.forEach(message => {
+                        const messageDiv = document.createElement('div');
+                        messageDiv.className = `message ${message.role === 'user' ? 'user-message' : 'ai-message'}`;
+                        messageDiv.textContent = message.content;
+                        chatMessages.appendChild(messageDiv);
+                    });
+                    
+                    document.getElementById('messageCount').textContent = data.messages.length;
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                }
+            } catch (error) {
+                console.error('Error loading conversation history:', error);
+            }
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !isWaitingForResponse) {
+                sendMessage();
+            }
+        }
+
+        async function sendMessage() {
+            const messageInput = document.getElementById('messageInput');
+            const message = messageInput.value.trim();
+            
+            if (!message || isWaitingForResponse) return;
+
+            // Add user message to chat
+            addMessageToChat('user', message);
+            messageInput.value = '';
+            
+            // Show loading
+            isWaitingForResponse = true;
+            document.getElementById('sendButton').disabled = true;
+            addLoadingMessage();
+
+            try {
+                const response = await fetch('http://localhost:3000/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        sessionId: currentSessionId
+                    })
+                });
+
+                const data = await response.json();
+                
+                // Remove loading message
+                removeLoadingMessage();
+                
+                if (response.ok) {
+                    addMessageToChat('assistant', data.reply);
+                    document.getElementById('messageCount').textContent = data.conversationLength;
+                } else {
+                    addMessageToChat('assistant', 'Sorry, I encountered an error: ' + data.reply);
+                }
+            } catch (error) {
+                console.error('Error sending message:', error);
+                removeLoadingMessage();
+                addMessageToChat('assistant', 'Sorry, I encountered an error. Please try again.');
+            } finally {
+                isWaitingForResponse = false;
+                document.getElementById('sendButton').disabled = false;
+                messageInput.focus();
+            }
+        }
+
+        function addMessageToChat(role, content) {
+            const chatMessages = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role === 'user' ? 'user-message' : 'ai-message'}`;
+            messageDiv.textContent = content;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function addLoadingMessage() {
+            const chatMessages = document.getElementById('chatMessages');
+            const loadingDiv = document.createElement('div');
+            loadingDiv.className = 'message ai-message loading';
+            loadingDiv.id = 'loadingMessage';
+            loadingDiv.textContent = 'AI is thinking...';
+            chatMessages.appendChild(loadingDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function removeLoadingMessage() {
+            const loadingMessage = document.getElementById('loadingMessage');
+            if (loadingMessage) {
+                loadingMessage.remove();
+            }
+        }
+
+        // Load conversation history on page load
+        window.addEventListener('load', loadConversationHistory);
+    </script>
+</body>
+</html>

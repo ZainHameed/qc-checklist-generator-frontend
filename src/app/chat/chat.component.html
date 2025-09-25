@@ -1,0 +1,189 @@
+<div class="workspace">
+  <div class="chat-container">
+    <div class="chat-header">
+      <h2>🤖 AI Assistant</h2>
+      <div class="session-info">
+        <span class="session-id">Session: {{ sessionId }}</span>
+        <span class="message-count">{{ messages.length }} messages</span>
+      </div>
+    </div>
+
+    <div class="chat-messages" #chatMessages>
+      <div
+        *ngFor="let msg of messages; trackBy: trackByMessage"
+        class="message-container"
+        [ngClass]="msg.role === 'User' ? 'user-message' : 'ai-message'"
+      >
+        <!-- User Message -->
+        <div *ngIf="msg.role === 'User'" class="message user-msg">
+          <div class="message-avatar">👤</div>
+          <div class="message-content">
+            <div class="message-text">{{ msg.content }}</div>
+            <div class="message-time">
+              {{ msg.timestamp | date : 'shortTime' }}
+            </div>
+          </div>
+        </div>
+
+        <!-- AI Message -->
+        <div *ngIf="msg.role === 'AI'" class="message ai-msg">
+          <div class="message-avatar">🤖</div>
+          <div class="message-content">
+            <div
+              class="message-text"
+              [innerHTML]="formatAIResponse(msg.content)"
+            ></div>
+            <div class="message-time">
+              {{ msg.timestamp | date : 'shortTime' }}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loading indicator -->
+      <div *ngIf="isLoading" class="message-container ai-message">
+        <div class="message ai-msg">
+          <div class="message-avatar">🤖</div>
+          <div class="message-content">
+            <div class="loading-indicator">
+              <div class="typing-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+              <span class="loading-text">AI is thinking...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-input-container">
+      <div class="input-wrapper">
+        <input
+          [(ngModel)]="userInput"
+          (keyup.enter)="sendMessage()"
+          placeholder="Type your message here..."
+          [disabled]="isLoading"
+          class="message-input"
+        />
+        <button
+          (click)="sendMessage()"
+          [disabled]="isLoading || !userInput.trim()"
+          class="send-button"
+        >
+          <span *ngIf="!isLoading">📤</span>
+          <span *ngIf="isLoading">⏳</span>
+        </button>
+      </div>
+
+      <div class="chat-controls">
+        <button (click)="clearChat()" class="control-button">
+          🗑️ Clear Chat
+        </button>
+        <button (click)="newSession()" class="control-button">
+          🆕 New Session
+        </button>
+      </div>
+    </div>
+
+    <!-- Editable Checklist Panel (bottom) -->
+  </div>
+  <div *ngIf="showChecklist" class="checklist-column">
+    <div class="checklist-panel">
+      <div class="checklist-header">
+        <h3>QC Checklist</h3>
+        <div style="display: flex; gap: 8px">
+          <button class="control-button" (click)="addChecklistSection()">
+            ➕ Add section
+          </button>
+          <button class="control-button" (click)="saveChecklist()">
+            💾 Save Checklist
+          </button>
+        </div>
+      </div>
+
+      <div class="checklist-sections">
+        <div
+          class="checklist-section"
+          *ngFor="let section of checklistSections; let si = index"
+        >
+          <div class="section-header">
+            <ng-container *ngIf="si === 0; else editableTitle">
+              <p class="section-title">{{ section.heading }}</p>
+            </ng-container>
+            <ng-template #editableTitle>
+              <input
+                class="section-title"
+                [(ngModel)]="section.heading"
+                (blur)="finishEditSection(si)"
+                (keyup.enter)="finishEditSection(si)"
+              />
+            </ng-template>
+            <button
+              *ngIf="si !== 0"
+              class="control-button small"
+              (click)="addChecklistItem(si)"
+            >
+              ➕ Add item
+            </button>
+          </div>
+
+          <div class="checklist-items">
+            <div
+              class="checklist-item"
+              *ngFor="let item of section.items; let i = index"
+            >
+              <input
+                type="checkbox"
+                [(ngModel)]="item.selected"
+                [disabled]="isItemDisabled(item)"
+              />
+              <textarea
+                class="checklist-textarea"
+                [(ngModel)]="item.text"
+                placeholder="Checklist item"
+                rows="2"
+                (ngModelChange)="onItemTextChange(item)"
+              ></textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+      <hr />
+    </div>
+  </div>
+
+  <!-- Modal for selected checklist -->
+  <div *ngIf="showModal" class="modal-overlay" (click)="closeModal()">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Selected Checklist Items</h3>
+        <button class="close-button" (click)="closeModal()">×</button>
+      </div>
+      <div class="modal-body">
+        <div
+          *ngFor="let section of getSelectedItemsBySection()"
+          class="modal-section"
+        >
+          <h4 class="modal-section-title">{{ section.sectionName }}</h4>
+          <ul class="modal-items">
+            <li *ngFor="let item of section.items" class="modal-item">
+              {{ item.text }}
+            </li>
+          </ul>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="control-button" (click)="closeModal()">Close</button>
+        <button
+          class="control-button save-button"
+          (click)="saveFinalChecklist()"
+          [disabled]="selectedItems.length === 0"
+        >
+          Save
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
