@@ -5,9 +5,9 @@ import {
   ElementRef,
   AfterViewChecked,
 } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute } from '@angular/router';
 import { ToastService } from '../toast/toast.service';
+import { ApiService } from '../services/api.service';
 
 @Component({
   selector: 'app-chat',
@@ -31,7 +31,7 @@ export class ChatComponent implements OnInit, AfterViewChecked {
   @ViewChild('chatMessages') private chatMessages!: ElementRef;
 
   constructor(
-    private http: HttpClient,
+    private apiService: ApiService,
     private route: ActivatedRoute,
     private toast: ToastService
   ) {}
@@ -135,8 +135,8 @@ export class ChatComponent implements OnInit, AfterViewChecked {
     this.isLoading = true;
 
     // Send to AI
-    this.http
-      .post<any>('http://localhost:3000/api/chat', {
+    this.apiService
+      .sendChatMessage({
         message,
         sessionId: this.sessionId,
       })
@@ -173,10 +173,10 @@ export class ChatComponent implements OnInit, AfterViewChecked {
 
   async loadConversationHistory() {
     try {
-      const response = await this.http
-        .get<any>(`http://localhost:3000/api/conversation/${this.sessionId}`)
+      const response = await this.apiService
+        .getConversationHistory(this.sessionId)
         .toPromise();
-      if (response.messages && response.messages.length > 0) {
+      if (response && response.messages && response.messages.length > 0) {
         this.messages = response.messages.map((msg: any) => ({
           role: msg.role === 'user' ? 'User' : 'AI',
           content: msg.content,
@@ -191,9 +191,7 @@ export class ChatComponent implements OnInit, AfterViewChecked {
 
   async clearChat() {
     try {
-      await this.http
-        .delete(`http://localhost:3000/api/conversation/${this.sessionId}`)
-        .toPromise();
+      await this.apiService.deleteConversation(this.sessionId).toPromise();
       this.messages = [];
       this.showChecklist = false;
       this.checklistSections = [];
